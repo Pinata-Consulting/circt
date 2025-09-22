@@ -13,6 +13,7 @@
 
 #include "circt/Conversion/ExportVerilog.h"
 #include "circt/Conversion/Passes.h"
+#include "circt/Conversion/SeqToSV.h"
 #include "circt/Conversion/VerifToSV.h"
 #include "circt/Dialect/Comb/CombDialect.h"
 #include "circt/Dialect/HW/HWDialect.h"
@@ -500,7 +501,10 @@ static LogicalResult executeWithHandler(MLIRContext *context,
   pm.addPass(
       verif::createLowerSymbolicValuesPass({opts.symbolicValueLowering}));
   pm.addPass(createLowerSimToSVPass());
-  pm.addPass(createLowerSeqToSVPass());
+  LowerSeqToSVOptions seqToSVOptions;
+  seqToSVOptions.disableMemRandomization = true;
+  seqToSVOptions.disableRegRandomization = true;
+  pm.addPass(createLowerSeqToSVPass(seqToSVOptions));
   pm.addNestedPass<hw::HWModuleOp>(
       createLowerVerifToSVPass(/* wrapClockedAssertionsInAlways */ true));
   pm.addNestedPass<hw::HWModuleOp>(sv::createHWLegalizeModulesPass());
