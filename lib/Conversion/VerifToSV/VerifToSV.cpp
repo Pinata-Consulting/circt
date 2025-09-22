@@ -172,7 +172,11 @@ struct VerifAssertLikeConversion : public OpConversionPattern<Op> {
 // verif.clocked_cover
 template <typename Op, typename TargetOp>
 struct VerifClockedAssertLikeConversion : public OpConversionPattern<Op> {
-  using OpConversionPattern<Op>::OpConversionPattern;
+  VerifClockedAssertLikeConversion(MLIRContext *context,
+                                   bool wrapClockedAssertionsInAlways,
+                                   PatternBenefit benefit = 1)
+      : OpConversionPattern<Op>(context, benefit),
+        wrapClockedAssertionsInAlways(wrapClockedAssertionsInAlways) {}
   using OpAdaptor = typename OpConversionPattern<Op>::OpAdaptor;
 
   // Convert the verif.assert like op that uses an enable, into an equivalent
@@ -192,12 +196,26 @@ struct VerifClockedAssertLikeConversion : public OpConversionPattern<Op> {
     auto eventattr = sv::EventControlAttr::get(
         op.getContext(), verifToSVEventControl(operands.getEdge()));
 
-    rewriter.replaceOpWithNewOp<TargetOp>(op, operands.getProperty(), eventattr,
-                                          operands.getClock(), disable,
-                                          operands.getLabelAttr());
+    if (wrapClockedAssertionsInAlways) {
+      rewriter.create<sv::AlwaysOp>(
+          op.getLoc(), eventattr.getValue(), operands.getClock(), [&] {
+            // Inside the always block, create the
+            // assert_property with the (possibly negated)
+            // disable
+            rewriter.replaceOpWithNewOp<TargetOp>(
+                op, operands.getProperty(), disable, operands.getLabelAttr());
+          });
+    } else {
+      rewriter.replaceOpWithNewOp<TargetOp>(op, operands.getProperty(),
+                                            eventattr, operands.getClock(),
+                                            disable, operands.getLabelAttr());
+    }
 
     return success();
   }
+
+private:
+  bool wrapClockedAssertionsInAlways;
 };
 
 } // namespace
@@ -208,6 +226,9 @@ struct VerifClockedAssertLikeConversion : public OpConversionPattern<Op> {
 
 namespace {
 struct VerifToSVPass : public circt::impl::LowerVerifToSVBase<VerifToSVPass> {
+  VerifToSVPass(bool wrapClockedAssertionsInAlways) {
+    this->wrapClockedAssertionsInAlways = wrapClockedAssertionsInAlways;
+  }
   void runOnOperation() override;
 };
 } // namespace
@@ -223,23 +244,24 @@ void VerifToSVPass::runOnOperation() {
                       verif::CoverOp, ClockedAssertOp, ClockedAssumeOp,
                       ClockedCoverOp>();
   target.addLegalDialect<sv::SVDialect, hw::HWDialect, comb::CombDialect>();
+  patterns.add<PrintOpConversionPattern, HasBeenResetConversion,
+               VerifAssertLikeConversion<verif::AssertOp, AssertPropertyOp>,
+               VerifAssertLikeConversion<verif::AssumeOp, AssumePropertyOp>,
+               VerifAssertLikeConversion<verif::CoverOp, CoverPropertyOp>>(
+      &context);
   patterns.add<
-      PrintOpConversionPattern, HasBeenResetConversion,
-      VerifAssertLikeConversion<verif::AssertOp, AssertPropertyOp>,
-      VerifAssertLikeConversion<verif::AssumeOp, AssumePropertyOp>,
-      VerifAssertLikeConversion<verif::CoverOp, CoverPropertyOp>,
       VerifClockedAssertLikeConversion<verif::ClockedAssertOp,
                                        AssertPropertyOp>,
       VerifClockedAssertLikeConversion<verif::ClockedAssumeOp,
                                        AssumePropertyOp>,
       VerifClockedAssertLikeConversion<verif::ClockedCoverOp, CoverPropertyOp>>(
-      &context);
+      &context, wrapClockedAssertionsInAlways);
 
   if (failed(applyPartialConversion(module, target, std::move(patterns))))
     signalPassFailure();
 }
 
 std::unique_ptr<OperationPass<hw::HWModuleOp>>
-circt::createLowerVerifToSVPass() {
-  return std::make_unique<VerifToSVPass>();
+circt::createLowerVerifToSVPass(bool wrapClockedAssertionsInAlways) {
+  return std::make_unique<VerifToSVPass>(wrapClockedAssertionsInAlways);
 }

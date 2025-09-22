@@ -27,7 +27,8 @@ class HWModuleOp;
 } // namespace hw
 
 /// Create the Verif to SV conversion pass.
-std::unique_ptr<OperationPass<hw::HWModuleOp>> createLowerVerifToSVPass();
+std::unique_ptr<OperationPass<hw::HWModuleOp>>
+createLowerVerifToSVPass(bool wrapClockedAssertionsInAlways = false);
 
 } // namespace circt
 

@@ -595,6 +595,9 @@ def LowerVerifToSV : Pass<"lower-verif-to-sv", "hw::HWModuleOp"> {
   let constructor = "circt::createLowerVerifToSVPass()";
   let dependentDialects = [
     "sv::SVDialect", "hw::HWDialect", "comb::CombDialect"];
+  let options =
+    [Option<"wrapClockedAssertionsInAlways", "wrap-clocked-assertions-in-always", "bool", "false",
+            "If true, will wrap clocked assertions in an always block.">];
 }
 
 //===----------------------------------------------------------------------===//
