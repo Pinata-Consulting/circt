@@ -501,7 +501,8 @@ static LogicalResult executeWithHandler(MLIRContext *context,
       verif::createLowerSymbolicValuesPass({opts.symbolicValueLowering}));
   pm.addPass(createLowerSimToSVPass());
   pm.addPass(createLowerSeqToSVPass());
-  pm.addNestedPass<hw::HWModuleOp>(createLowerVerifToSVPass());
+  pm.addNestedPass<hw::HWModuleOp>(
+      createLowerVerifToSVPass(/* wrapClockedAssertionsInAlways */ true));
   pm.addNestedPass<hw::HWModuleOp>(sv::createHWLegalizeModulesPass());
   pm.addNestedPass<hw::HWModuleOp>(sv::createPrettifyVerilogPass());
   pm.addPass(createExportVerilogPass(verilogFile->os()));
