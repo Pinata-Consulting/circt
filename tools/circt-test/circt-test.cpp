@@ -120,6 +120,10 @@ struct Options {
                "chunk independently"),
       cl::init(false), cl::Hidden, cl::cat(cat)};
 
+  cl::opt<bool> printIRAfterAll{"print-ir-after-all",
+                                cl::desc("Print IR after all"), cl::init(false),
+                                cl::Hidden, cl::cat(cat)};
+
   LoweringOptionsOption loweringOptions{cat};
 };
 Options opts;
@@ -436,6 +440,10 @@ static LogicalResult executeWithHandler(MLIRContext *context,
   // Preprocess the input.
   {
     PassManager pm(context);
+    if (opts.printIRAfterAll) {
+      context->disableMultithreading();
+      pm.enableIRPrinting();
+    }
     pm.enableVerifier(opts.verifyPasses);
     if (opts.ignoreContracts)
       pm.addPass(verif::createStripContractsPass());
@@ -503,6 +511,10 @@ static LogicalResult executeWithHandler(MLIRContext *context,
 
   // Generate Verilog output.
   PassManager pm(context);
+  if (opts.printIRAfterAll) {
+    context->disableMultithreading();
+    pm.enableIRPrinting();
+  }
   pm.enableVerifier(opts.verifyPasses);
   pm.addPass(verif::createLowerFormalToHWPass());
   pm.addPass(
