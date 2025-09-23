@@ -14,6 +14,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "circt/Dialect/Comb/CombOps.h"
 #include "circt/Dialect/HW/HWOps.h"
 #include "circt/Dialect/HW/HWTypes.h"
 #include "circt/Dialect/SV/SVOps.h"
@@ -357,15 +358,26 @@ namespace {
 template <typename Op>
 bool tryLoweringClockedAssertLike(Op &op) {
   auto event = op.getEvent();
-  if (!event.has_value())
+  auto disable = op.getDisable();
+  if (!event.has_value() && !disable)
     return false;
 
   OpBuilder builder(op);
 
-  sv::AlwaysOp::create(builder, op->getLoc(), *event, op.getClock(), [&] {
-    Op::create(builder, op.getLoc(), op.getProperty(), op.getDisable(),
-               op.getLabelAttr());
-  });
+  auto property = op.getProperty();
+
+  if (disable) {
+    property = builder.createOrFold<comb::OrOp>(op.getLoc(), property, disable);
+    disable = {};
+  }
+
+  if (event) {
+    sv::AlwaysOp::create(builder, op->getLoc(), *event, op.getClock(), [&] {
+      Op::create(builder, op.getLoc(), property, disable, op.getLabelAttr());
+    });
+  } else {
+    Op::create(builder, op.getLoc(), property, disable, op.getLabelAttr());
+  }
   return true;
 }
 } // namespace
